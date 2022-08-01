@@ -35,16 +35,16 @@ public class KeyValueObserver : IObserver<KeyValuePair<string, object>>
 
     public void OnNext(KeyValuePair<string, object> value)
     {
-        if (value.Key == CoreEventId.ContextInitialized.Name)
+        //Helps to track the properties that are changed
+        if(value.Key == CoreEventId.PropertyChangeDetected.ToString())
         {
-            var payload = (ContextInitializedEventData)value.Value;
-            Console.WriteLine($"EF is initializing {payload.Context.GetType().Name} ");
+            Console.WriteLine($"{value.Value}");  
         }
 
-        if (value.Key == RelationalEventId.ConnectionOpening.Name)
+        //Helps to track the state of each entity
+        if(value.Key == CoreEventId.StateChanged.ToString())
         {
-            var payload = (ConnectionEventData)value.Value;
-            Console.WriteLine($"EF is opening a connection to {payload.Connection.ConnectionString} ");
+            Console.WriteLine($"{value.Value}");
         }
     }
 }
@@ -59,24 +59,33 @@ public class Program
         DiagnosticListener.AllListeners.Subscribe(new DiagnosticObserver());
         #endregion
 
+        //Testing new added entities
         using (var context = new BlogsContext())
         {
             context.Database.EnsureDeleted();
             context.Database.EnsureCreated();
 
             context.Add(
-                new Blog { Name = "EF Blog", Posts = { new Post { Title = "EF Core 3.1!" }, new Post { Title = "EF Core 5.0!" } } });
+                        new Blog { Name = "EF Blog", Posts = { new Post { Title = "EF Core 3.1!" }, new Post { Title = "EF Core 5.0!" } } });
+
+            context.Add(
+                        new Blog { Name = "EF6 Blog", Posts = { new Post { Title = "EF Core 6.1!" }, new Post { Title = "EF Core 6.0!" } } });
 
             context.SaveChanges();
         }
 
+        //Testing existing updated Entities
         using (var context = new BlogsContext())
         {
-            var blog = context.Blogs.Include(e => e.Posts).Single();
+            var blog = context.Blogs.Include(e => e.Posts).First();
 
             blog.Name = "EF Core Blog";
             context.Remove(blog.Posts.First());
             blog.Posts.Add(new Post { Title = "EF Core 6.0!" });
+
+            var blog2 = context.Blogs.Skip(1).Take(1).First();
+            blog2.Name = "EF6 Core Blog";
+
 
             context.SaveChanges();
         }
@@ -87,7 +96,13 @@ public class Program
 public class BlogsContext : DbContext
 {
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        => optionsBuilder.UseSqlite("DataSource=blogs.db");
+    {
+        optionsBuilder.UseSqlite("DataSource=blogs.db");
+        
+        //Enable this below to see and track entity data
+        optionsBuilder.EnableSensitiveDataLogging();
+        //optionsBuilder.LogTo(Console.WriteLine);
+    }
 
     public DbSet<Blog> Blogs { get; set; }
 }
